@@ -1,0 +1,18 @@
+<resources>
+    <string name="app_name">Movies</string>
+    <string name="single_movie_title">Movie Details</string>
+    <string name="error_message">Error while fetching data</string>
+
+    <string name="title_top_rated">Top Rated</string>
+    <string name="title_most_popular">Most Popular</string>
+    <string name="title_favorite">Favorite</string>
+    <string name="title_vidoes">Videos</string>
+    <string name="title_review">Reviews</string>
+
+    <string name="see_all">See All ></string>
+    <string name="add_to_favorite">Add to Favorite</string>
+    <string name="remove_favorite">Remove Favorite</string>
+
+    <integer name="most_popular">1</integer>
+    <integer name="top_rated">2</integer>
+</resources>
