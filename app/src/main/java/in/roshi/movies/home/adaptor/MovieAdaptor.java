@@ -12,6 +12,8 @@ import android.view.ViewGroup;
 import android.widget.ImageView;
 import android.widget.TextView;
 
+import com.squareup.picasso.Picasso;
+
 import java.io.InputStream;
 
 import in.roshi.movies.R;
@@ -27,14 +29,16 @@ public class MovieAdaptor extends RecyclerView.Adapter<MovieAdaptor.MovieViewHol
     private final String LOG_KEY = this.getClass().getCanonicalName();
     private MovieResults movieResults;
     final private ListItemClickListener mOnClickListener;
+    private Context context;
 
     public interface ListItemClickListener {
         void onListItemClick(int clickedItemIndex);
     }
 
-    public MovieAdaptor(MovieResults movieResults, ListItemClickListener listener) {
+    public MovieAdaptor(MovieResults movieResults, ListItemClickListener listener, Context context) {
         mOnClickListener = listener;
         this.movieResults = movieResults;
+        this.context = context;
     }
 
     @Override
@@ -87,7 +91,9 @@ public class MovieAdaptor extends RecyclerView.Adapter<MovieAdaptor.MovieViewHol
                 String poster_url = "http://image.tmdb.org/t/p/w185" + results.getPoster_path();
                 listItemNumberView.setText(results.getTitle());
                 movieID.setText(results.getId());
-                new DownloadImageTask(imageView).execute(poster_url);
+                Picasso.with(context)
+                        .load(poster_url)
+                        .into(imageView);
             } catch (Exception e) {
                 e.printStackTrace();
             }
@@ -100,30 +106,4 @@ public class MovieAdaptor extends RecyclerView.Adapter<MovieAdaptor.MovieViewHol
             mOnClickListener.onListItemClick(Integer.parseInt(t.getText().toString()));
         }
     }
-
-    private class DownloadImageTask extends AsyncTask<String, Void, Bitmap> {
-        ImageView bmImage;
-
-        public DownloadImageTask(ImageView bmImage) {
-            this.bmImage = bmImage;
-        }
-
-        protected Bitmap doInBackground(String... urls) {
-            String urldisplay = urls[0];
-            Bitmap mIcon11 = null;
-            try {
-                InputStream in = new java.net.URL(urldisplay).openStream();
-                mIcon11 = BitmapFactory.decodeStream(in);
-            } catch (Exception e) {
-                Log.e("Error", e.getMessage());
-                e.printStackTrace();
-            }
-            return mIcon11;
-        }
-
-        protected void onPostExecute(Bitmap result) {
-            bmImage.setImageBitmap(result);
-        }
-    }
-
 }

@@ -1,15 +1,22 @@
 package in.roshi.movies.home.activity;
 
+import android.content.Context;
 import android.content.Intent;
+import android.content.SharedPreferences;
 import android.database.Cursor;
 import android.support.v4.app.LoaderManager;
 import android.support.v4.content.AsyncTaskLoader;
 import android.support.v4.content.Loader;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
+import android.support.v7.preference.PreferenceManager;
 import android.support.v7.widget.GridLayoutManager;
 import android.support.v7.widget.RecyclerView;
 import android.text.TextUtils;
+import android.util.DisplayMetrics;
+import android.util.Log;
+import android.view.Menu;
+import android.view.MenuItem;
 import android.view.View;
 import android.widget.ProgressBar;
 import android.widget.ScrollView;
@@ -21,6 +28,8 @@ import java.io.IOException;
 import java.net.URL;
 import java.util.ArrayList;
 
+import butterknife.BindView;
+import butterknife.ButterKnife;
 import in.roshi.movies.R;
 import in.roshi.movies.database.DBContract;
 import in.roshi.movies.home.adaptor.MovieAdaptor;
@@ -32,24 +41,22 @@ import in.roshi.movies.util.NetworkUtils;
 public class Home extends AppCompatActivity
         implements
         LoaderManager.LoaderCallbacks<MovieResults>,
-        MovieAdaptor.ListItemClickListener {
+        MovieAdaptor.ListItemClickListener  {
 
     private final String LOG_KEY = this.getClass().getCanonicalName();
 
-    private static final int TOP_RATED_TASK_ID = 1;
-    private static final int MOST_POPULAR_TASK_ID = 2;
-    private static final int FAVORITE_TASK_ID = 3;
-    private static final String URL_IDENTIFIER = "url";
+    private static final int FETCH_MOVIES_TASK_ID = 1;
+    private static final int FETCH_FAVORITES_TASK_ID = 2;
+    private static final String FETCH_MOVIES_URL_IDENTIFIER = "url";
+
+    private static final int SEARCH_BY_POPULARITY = 1;
+    private static final int SEARCH_BY_RATING = 2;
+    private static final int SEARCH_FAVOURITE = 3;
 
     // all screen elements
-    private ProgressBar mLoadingIndicator;
-    private ScrollView mScrollHome;
-    private TextView mErrorTopRated;
-    private TextView mErrorMostPopular;
-    private TextView mErrorFavorite;
-    private RecyclerView mMostPopular;
-    private RecyclerView mTopRated;
-    private RecyclerView mFavorite;
+    @BindView(R.id.pb_loading_indicator) ProgressBar mLoadingIndicator;
+    @BindView(R.id.tv_error_message_display) TextView mError;
+    @BindView(R.id.rv_movies) RecyclerView mMovies;
 
     private Gson gson = new Gson();
 
@@ -57,27 +64,38 @@ public class Home extends AppCompatActivity
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_home);
+        ButterKnife.bind(this);
 
-        // initialize all screen elements
-        mLoadingIndicator = (ProgressBar) findViewById(R.id.pb_loading_indicator);
-        mScrollHome = (ScrollView) findViewById(R.id.sv_home);
-        mErrorTopRated = (TextView) findViewById(R.id.tv_error_top_rated);
-        mErrorMostPopular = (TextView) findViewById(R.id.tv_error_most_popular);
-        mErrorFavorite = (TextView) findViewById(R.id.tv_error_favorite);
-        mMostPopular = (RecyclerView) findViewById(R.id.rv_most_popular);
-        mTopRated = (RecyclerView) findViewById(R.id.rv_top_rated);
-        mFavorite = (RecyclerView) findViewById(R.id.rv_favorite);
+        GridLayoutManager layoutManager =
+                new GridLayoutManager(this, calculateNoOfColumns(getApplicationContext()));
 
-        GridLayoutManager lmMostPopular = new GridLayoutManager(this, 1, GridLayoutManager.HORIZONTAL, false);
-        GridLayoutManager lmTopRated = new GridLayoutManager(this, 1, GridLayoutManager.HORIZONTAL, false);
-        GridLayoutManager lmFavorite = new GridLayoutManager(this, 1, GridLayoutManager.HORIZONTAL, false);
+        mMovies.setLayoutManager(layoutManager);
 
-        mMostPopular.setLayoutManager(lmMostPopular);
-        mTopRated.setLayoutManager(lmTopRated);
-        mFavorite.setLayoutManager(lmFavorite);
+        getMovies(SEARCH_BY_POPULARITY);
+    }
 
-        getMovies();
+    @Override
+    public boolean onCreateOptionsMenu(Menu menu) {
+        getMenuInflater().inflate(R.menu.mainmenu, menu);
+        return true;
+    }
 
+    @Override
+    public boolean onOptionsItemSelected(MenuItem item) {
+        int itemThatWasClickedId = item.getItemId();
+        if (itemThatWasClickedId == R.id.action_search_popularity) {
+            getMovies(SEARCH_BY_POPULARITY);
+            return true;
+        }
+        else if (itemThatWasClickedId == R.id.action_search_rating) {
+            getMovies(SEARCH_BY_RATING);
+            return true;
+        }
+        else if (itemThatWasClickedId == R.id.action_search_favorite) {
+            getMovies(SEARCH_FAVOURITE);
+            return true;
+        }
+        return super.onOptionsItemSelected(item);
     }
 
     @Override
@@ -87,7 +105,7 @@ public class Home extends AppCompatActivity
 
             @Override
             protected void onStartLoading() {
-                if (id < 3 && args == null) {
+                if (id < 2 && args == null) {
                     return;
                 }
                 forceLoad();
@@ -96,7 +114,8 @@ public class Home extends AppCompatActivity
             @Override
             public MovieResults loadInBackground() {
 
-                if(id == FAVORITE_TASK_ID){
+                if(id == FETCH_FAVORITES_TASK_ID){
+
                     Cursor cursor = getContentResolver().query(
                             DBContract.BASE_CONTENT_URI.buildUpon()
                                     .appendPath(DBContract.PATH_MOVIES)
@@ -122,7 +141,7 @@ public class Home extends AppCompatActivity
                     }
                 }
                 else {
-                    String movieDBURLString = args.getString(URL_IDENTIFIER);
+                    String movieDBURLString = args.getString(FETCH_MOVIES_URL_IDENTIFIER);
 
                     if (movieDBURLString == null || TextUtils.isEmpty(movieDBURLString)) {
                         return null;
@@ -146,22 +165,9 @@ public class Home extends AppCompatActivity
     @Override
     public void onLoadFinished(Loader<MovieResults> loader, MovieResults data) {
         mLoadingIndicator.setVisibility(View.INVISIBLE);
-
-        if(loader.getId() == MOST_POPULAR_TASK_ID) {
-            if (data != null)
-                showMostPopular(data);
-            else showErrorMostPopular();
-        }
-        else if(loader.getId() == TOP_RATED_TASK_ID) {
-            if (data != null)
-                showTopRated(data);
-            else showErrorTopRated();
-        }
-        else if(loader.getId() == FAVORITE_TASK_ID) {
-            if (data != null)
-                showFavourite(data);
-            else showErrorFavorite();
-        }
+        if (data != null)
+            showMovies(data);
+        else showError(loader.getId());
     }
 
     @Override
@@ -169,79 +175,69 @@ public class Home extends AppCompatActivity
 
     }
 
-    private void showMostPopular(MovieResults movieResults) {
-        mErrorMostPopular.setVisibility(View.INVISIBLE);
-        MovieAdaptor mAdapter = new MovieAdaptor(movieResults, this);
-        mMostPopular.setAdapter(mAdapter);
-        mMostPopular.setVisibility(View.VISIBLE);
+    private void showMovies(MovieResults movieResults) {
+        mError.setVisibility(View.INVISIBLE);
+        MovieAdaptor mAdapter = new MovieAdaptor(movieResults, this, getApplicationContext());
+        mMovies.setAdapter(mAdapter);
+        mMovies.setVisibility(View.VISIBLE);
     }
 
-    private void showTopRated(MovieResults movieResults) {
-        mErrorTopRated.setVisibility(View.INVISIBLE);
-        MovieAdaptor mAdapter = new MovieAdaptor(movieResults, this);
-        mTopRated.setAdapter(mAdapter);
-        mTopRated.setVisibility(View.VISIBLE);
+    private void showError(int id) {
+        mMovies.setVisibility(View.INVISIBLE);
+
+        if (id == FETCH_FAVORITES_TASK_ID)
+            mError.setText("No movies in favourite");
+        else mError.setText("Unable to fetch movies");
+
+        mError.setVisibility(View.VISIBLE);
     }
 
-    private void showFavourite(MovieResults movieResults) {
-        mErrorFavorite.setVisibility(View.INVISIBLE);
-        MovieAdaptor mAdapter = new MovieAdaptor(movieResults, this);
-        mFavorite.setAdapter(mAdapter);
-        mFavorite.setVisibility(View.VISIBLE);
-    }
-
-    private void showErrorMostPopular() {
-        mMostPopular.setVisibility(View.INVISIBLE);
-        mErrorMostPopular.setVisibility(View.VISIBLE);
-    }
-
-    private void showErrorTopRated() {
-        mTopRated.setVisibility(View.INVISIBLE);
-        mErrorTopRated.setVisibility(View.VISIBLE);
-    }
-
-    private void showErrorFavorite() {
-        mFavorite.setVisibility(View.INVISIBLE);
-        mErrorFavorite.setVisibility(View.VISIBLE);
-    }
-
-    private void getMovies() {
+    private void getMovies(int searchBy) {
 
         LoaderManager loaderManager = getSupportLoaderManager();
         Loader<String> searchLoader;
 
         mLoadingIndicator.setVisibility(View.VISIBLE);
 
-        // get most popular
-        URL mostPopularUrl = NetworkUtils.buildUrl(this.getResources().getInteger(R.integer.most_popular));
-        Bundle mostPopularBundle = new Bundle();
-        mostPopularBundle.putString(URL_IDENTIFIER, mostPopularUrl.toString());
-        searchLoader = loaderManager.getLoader(MOST_POPULAR_TASK_ID);
-        if (searchLoader == null) {
-            loaderManager.initLoader(MOST_POPULAR_TASK_ID, mostPopularBundle, this);
-        } else {
-            loaderManager.restartLoader(MOST_POPULAR_TASK_ID, mostPopularBundle, this);
+        switch (searchBy){
+            case SEARCH_BY_POPULARITY:{
+                // get most popular
+                URL mostPopularUrl = NetworkUtils.buildUrl(this.getResources().getInteger(R.integer.most_popular));
+                Bundle mostPopularBundle = new Bundle();
+                mostPopularBundle.putString(FETCH_MOVIES_URL_IDENTIFIER, mostPopularUrl.toString());
+                searchLoader = loaderManager.getLoader(FETCH_MOVIES_TASK_ID);
+                if (searchLoader == null) {
+                    loaderManager.initLoader(FETCH_MOVIES_TASK_ID, mostPopularBundle, this);
+                } else {
+                    loaderManager.restartLoader(FETCH_MOVIES_TASK_ID, mostPopularBundle, this);
+                }
+                break;
+            }
+            case SEARCH_BY_RATING:{
+                // get top rated
+                URL topRatedUrl = NetworkUtils.buildUrl(this.getResources().getInteger(R.integer.top_rated));
+                Bundle topRatedBundle = new Bundle();
+                topRatedBundle.putString(FETCH_MOVIES_URL_IDENTIFIER, topRatedUrl.toString());
+                searchLoader = loaderManager.getLoader(FETCH_MOVIES_TASK_ID);
+                if (searchLoader == null) {
+                    loaderManager.initLoader(FETCH_MOVIES_TASK_ID, topRatedBundle, this);
+                } else {
+                    loaderManager.restartLoader(FETCH_MOVIES_TASK_ID, topRatedBundle, this);
+                }
+                break;
+            }
+            case SEARCH_FAVOURITE:{
+                // get favourite from db
+                searchLoader = loaderManager.getLoader(FETCH_FAVORITES_TASK_ID);
+                if (searchLoader == null) {
+                    loaderManager.initLoader(FETCH_FAVORITES_TASK_ID, null, this);
+                } else {
+                    loaderManager.restartLoader(FETCH_FAVORITES_TASK_ID, null, this);
+                }
+                break;
+            }
+            default:{ }
         }
-
-        // get top rated
-        URL topRatedUrl = NetworkUtils.buildUrl(this.getResources().getInteger(R.integer.top_rated));
-        Bundle topRatedBundle = new Bundle();
-        topRatedBundle.putString(URL_IDENTIFIER, topRatedUrl.toString());
-        searchLoader = loaderManager.getLoader(TOP_RATED_TASK_ID);
-        if (searchLoader == null) {
-            loaderManager.initLoader(TOP_RATED_TASK_ID, topRatedBundle, this);
-        } else {
-            loaderManager.restartLoader(TOP_RATED_TASK_ID, topRatedBundle, this);
-        }
-
-        // get favourite from db
-        searchLoader = loaderManager.getLoader(FAVORITE_TASK_ID);
-        if (searchLoader == null) {
-            loaderManager.initLoader(FAVORITE_TASK_ID, null, this);
-        } else {
-            loaderManager.restartLoader(FAVORITE_TASK_ID, null, this);
-        }
-
     }
 
     @Override
@@ -251,4 +247,14 @@ public class Home extends AppCompatActivity
         startChildActivityIntent.putExtra(Intent.EXTRA_TEXT, String.valueOf(clickedItemIndex));
         startActivity(startChildActivityIntent);
     }
+
+    public static int calculateNoOfColumns(Context context) {
+        DisplayMetrics displayMetrics = context.getResources().getDisplayMetrics();
+        float dpWidth = displayMetrics.widthPixels / displayMetrics.density;
+        int scalingFactor = 180;
+        int noOfColumns = (int) (dpWidth / scalingFactor);
+        return noOfColumns;
+    }
+
+
 }

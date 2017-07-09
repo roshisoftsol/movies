@@ -36,6 +36,8 @@ import java.net.MalformedURLException;
 import java.net.URL;
 import java.util.ArrayList;
 
+import butterknife.BindView;
+import butterknife.ButterKnife;
 import in.roshi.movies.R;
 import in.roshi.movies.database.DBContract;
 import in.roshi.movies.home.model.MovieResults;
@@ -60,22 +62,22 @@ public class SingleMovie extends AppCompatActivity
     private final int DATA_FROM_DB_TASK_ID = 4;
     private final int GET_IMAGE_TASK_ID = 5;
 
-    private ConstraintLayout constraintLayout;
-    private TextView  mError;
-    private ImageView mImageView;
-    private TextView  mMovieTitle;
-    private TextView  mMovieYear;
-    private TextView  mMovieDuration;
-    private TextView  mMovieRating;
-    private TextView  mMovieDescription;
-    private Button    mFavourite;
+    @BindView(R.id.movie_container) ConstraintLayout constraintLayout;
+    @BindView(R.id.iv_movie_poster) ImageView mImageView;
+    @BindView(R.id.tv_movie_title) TextView  mMovieTitle;
+    @BindView(R.id.tv_movie_year) TextView  mMovieYear;
+    @BindView(R.id.tv_movie_duration) TextView  mMovieDuration;
+    @BindView(R.id.tv_movie_rating) TextView  mMovieRating;
+    @BindView(R.id.tv_movie_description) TextView  mMovieDescription;
+    @BindView(R.id.bt_movie_favourite) Button    mFavourite;
+    @BindView(R.id.rv_videos) RecyclerView mVideosView;
+    @BindView(R.id.rv_review) RecyclerView mReviewView;
     private Boolean   mMovieIsFavorite;
     private Movie     mMovieData;
     private Videos    mVideos;
     private Review    mReview;
     private Bitmap    mMoviePosterBitmap;
-    private RecyclerView mVideosView;
-    private RecyclerView mReviewView;
+
 
     private Gson gson = new Gson();
 
@@ -85,6 +87,7 @@ public class SingleMovie extends AppCompatActivity
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_single_movie);
+        ButterKnife.bind(this);
 
         // Set back button
         ActionBar actionBar = this.getSupportActionBar();
@@ -93,17 +96,6 @@ public class SingleMovie extends AppCompatActivity
             actionBar.setDisplayHomeAsUpEnabled(true);
 
         // initialize all screen elements
-        constraintLayout = (ConstraintLayout) findViewById(R.id.movie_container);
-        mImageView = (ImageView) findViewById(R.id.iv_movie_poster);
-        mMovieTitle = (TextView) findViewById(R.id.tv_movie_title);
-        mMovieYear = (TextView) findViewById(R.id.tv_movie_year);
-        mMovieDuration = (TextView) findViewById(R.id.tv_movie_duration);
-        mMovieRating = (TextView) findViewById(R.id.tv_movie_rating);
-        mMovieDescription = (TextView) findViewById(R.id.tv_movie_description);
-        mFavourite = (Button) findViewById(R.id.bt_movie_favourite);
-        mVideosView = (RecyclerView) findViewById(R.id.rv_videos);
-        mReviewView = (RecyclerView) findViewById(R.id.rv_review);
-
         LinearLayoutManager layoutManagerVideo = new LinearLayoutManager(this);
         mVideosView.setLayoutManager(layoutManagerVideo);
         LinearLayoutManager layoutManagerReview = new LinearLayoutManager(this);
